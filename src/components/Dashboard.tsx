@@ -17,6 +17,7 @@ import { SeasonsLeagues } from '@/components/analytics/SeasonsLeagues';
 import { PersonalGrowthDashboard } from '@/components/analytics/PersonalGrowthDashboard';
 import { TeamAnalytics } from '@/components/analytics/TeamAnalytics';
 import { CollaborationHeatmap } from '@/components/analytics/CollaborationHeatmap';
+import { AdminDashboard } from '@/components/admin/AdminDashboard';
 
 export function Dashboard() {
   const { isAuthenticated, activeTab, setShowLoginModal, currentUser } = useAppStore();
@@ -53,6 +54,8 @@ export function Dashboard() {
         return <TeamAnalytics />;
       case 'network':
         return <CollaborationHeatmap />;
+      case 'admin':
+        return <AdminDashboard />;
       default:
         return <EventDiscovery />;
     }

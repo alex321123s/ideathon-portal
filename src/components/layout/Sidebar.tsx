@@ -18,7 +18,9 @@ import {
   BarChart3,
   Link2,
   Medal,
+  Shield,
 } from 'lucide-react';
+import { ADMIN_EMAIL } from '@/lib/supabase';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -38,6 +40,7 @@ const navItems = [
   { id: 'growth', label: 'Personal Growth', icon: TrendingUp },
   { id: 'team-analytics', label: 'Team Analytics', icon: BarChart3 },
   { id: 'network', label: 'Collaboration Network', icon: Link2 },
+  { id: 'admin', label: 'Admin Panel', icon: Shield, adminOnly: true },
 ];
 
 export function Sidebar() {
@@ -104,6 +107,11 @@ export function Sidebar() {
         {/* Navigation */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
+            // Check if item is admin-only and user is not admin
+            const isAdminItem = 'adminOnly' in item && item.adminOnly;
+            const isUserAdmin = currentUser?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+            if (isAdminItem && !isUserAdmin) return null;
+
             if (item.id === 'divider') {
               return (
                 <div key={item.id} className="py-2">
