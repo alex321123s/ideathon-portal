@@ -13,6 +13,10 @@ import { MemoryWall } from '@/components/memory/MemoryWall';
 import { TrophyCase } from '@/components/profile/TrophyCase';
 import { NotificationsPanel } from './NotificationsPanel';
 import { SettingsPanel } from './SettingsPanel';
+import { SeasonsLeagues } from '@/components/analytics/SeasonsLeagues';
+import { PersonalGrowthDashboard } from '@/components/analytics/PersonalGrowthDashboard';
+import { TeamAnalytics } from '@/components/analytics/TeamAnalytics';
+import { CollaborationHeatmap } from '@/components/analytics/CollaborationHeatmap';
 
 export function Dashboard() {
   const { isAuthenticated, activeTab, setShowLoginModal, currentUser } = useAppStore();
@@ -41,6 +45,14 @@ export function Dashboard() {
         return <NotificationsPanel />;
       case 'settings':
         return <SettingsPanel />;
+      case 'seasons':
+        return <SeasonsLeagues />;
+      case 'growth':
+        return <PersonalGrowthDashboard />;
+      case 'team-analytics':
+        return <TeamAnalytics />;
+      case 'network':
+        return <CollaborationHeatmap />;
       default:
         return <EventDiscovery />;
     }

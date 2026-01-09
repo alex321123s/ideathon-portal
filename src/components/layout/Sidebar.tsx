@@ -14,6 +14,10 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  TrendingUp,
+  BarChart3,
+  Link2,
+  Medal,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -29,6 +33,11 @@ const navItems = [
   { id: 'sprint', label: 'Sprint', icon: Timer },
   { id: 'memory', label: 'Memory Wall', icon: Archive },
   { id: 'trophies', label: 'Trophies', icon: Trophy },
+  { id: 'divider', label: '', icon: null },
+  { id: 'seasons', label: 'Seasons & Leagues', icon: Medal },
+  { id: 'growth', label: 'Personal Growth', icon: TrendingUp },
+  { id: 'team-analytics', label: 'Team Analytics', icon: BarChart3 },
+  { id: 'network', label: 'Collaboration Network', icon: Link2 },
 ];
 
 export function Sidebar() {
@@ -95,7 +104,18 @@ export function Sidebar() {
         {/* Navigation */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
-            const Icon = item.icon;
+            if (item.id === 'divider') {
+              return (
+                <div key={item.id} className="py-2">
+                  <div className="border-t border-slate-700" />
+                  {!collapsed && (
+                    <p className="text-xs text-slate-500 uppercase mt-2 px-3">Analytics</p>
+                  )}
+                </div>
+              );
+            }
+            
+            const Icon = item.icon!;
             const isActive = activeTab === item.id;
             
             return (
