@@ -115,11 +115,6 @@ export function EventCreationModal({ onClose, onSave, editEvent }: EventCreation
   };
 
   const handleSave = async () => {
-    if (!isDbConfigured) {
-      setError('Database not configured. Please add Supabase credentials.');
-      return;
-    }
-
     if (!formData.name || !formData.location || !formData.registrationOpens || !formData.sprintStart) {
       setError('Please fill in all required fields.');
       return;

@@ -22,7 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useAppStore } from '@/store';
 import type { EventState } from '@/types';
-import { getEvents, DbEvent, isSupabaseConfigured } from '@/lib/db';
+import { getEvents, DbEvent } from '@/lib/db';
 
 const stateLabels: Record<EventState, { label: string; color: string }> = {
   upcoming: { label: 'Coming Soon', color: 'bg-slate-500' },
@@ -74,18 +74,12 @@ export function EventDiscovery() {
   const [selectedEvent, setSelectedEvent] = useState<DisplayEvent | null>(null);
   const [showEntryGate, setShowEntryGate] = useState(false);
 
-  const isDbConfigured = isSupabaseConfigured();
-
   const fetchEvents = useCallback(async () => {
-    if (!isDbConfigured) {
-      setLoading(false);
-      return;
-    }
     setLoading(true);
     const { data } = await getEvents();
     setEvents(data.map(mapDbEventToDisplay));
     setLoading(false);
-  }, [isDbConfigured]);
+  }, []);
 
   useEffect(() => {
     fetchEvents();
@@ -137,17 +131,8 @@ export function EventDiscovery() {
           </div>
         )}
 
-        {/* Not Configured State */}
-        {!loading && !isDbConfigured && (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
-            <AlertCircle className="w-12 h-12 text-amber-400 mb-3" />
-            <p className="text-slate-400">Database not configured</p>
-            <p className="text-sm text-slate-500">Add Supabase credentials to view events</p>
-          </div>
-        )}
-
         {/* Empty State */}
-        {!loading && isDbConfigured && events.length === 0 && (
+        {!loading && events.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <Calendar className="w-12 h-12 text-slate-500 mb-3" />
             <p className="text-slate-400">No events yet</p>
