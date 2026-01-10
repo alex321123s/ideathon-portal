@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Calendar,
@@ -11,18 +11,18 @@ import {
   ChevronRight,
   Sparkles,
   Clock,
-  ArrowRight,
   Star,
-  Zap,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
-import { format, formatDistanceToNow, isPast, isFuture } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useAppStore } from '@/store';
-import type { IdeathonEvent, EventState } from '@/types';
-import { EntryGateModal } from './EntryGateModal';
+import type { EventState } from '@/types';
+import { getEvents, DbEvent, isSupabaseConfigured } from '@/lib/db';
 
 const stateLabels: Record<EventState, { label: string; color: string }> = {
   upcoming: { label: 'Coming Soon', color: 'bg-slate-500' },
@@ -34,10 +34,62 @@ const stateLabels: Record<EventState, { label: string; color: string }> = {
   completed: { label: 'Completed', color: 'bg-slate-600' },
 };
 
+// Map database event to display format
+interface DisplayEvent {
+  id: string;
+  name: string;
+  description: string | null;
+  state: EventState;
+  location: string;
+  sprintStart: string;
+  registrationOpens: string;
+  registrationCloses: string;
+  currentParticipants: number;
+  maxParticipants: number;
+  generatedTheme: string | null;
+  imageUrl: string | null;
+}
+
+function mapDbEventToDisplay(event: DbEvent): DisplayEvent {
+  return {
+    id: event.id,
+    name: event.name,
+    description: event.description,
+    state: event.state as EventState,
+    location: event.location,
+    sprintStart: event.sprint_start,
+    registrationOpens: event.registration_opens,
+    registrationCloses: event.registration_closes,
+    currentParticipants: event.current_participants,
+    maxParticipants: event.max_participants,
+    generatedTheme: event.generated_theme,
+    imageUrl: event.image_url,
+  };
+}
+
 export function EventDiscovery() {
-  const { events, setActiveEvent, setActiveTab } = useAppStore();
-  const [selectedEvent, setSelectedEvent] = useState<IdeathonEvent | null>(null);
+  const { setActiveTab } = useAppStore();
+  const [events, setEvents] = useState<DisplayEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedEvent, setSelectedEvent] = useState<DisplayEvent | null>(null);
   const [showEntryGate, setShowEntryGate] = useState(false);
+
+  const isDbConfigured = isSupabaseConfigured();
+
+  const fetchEvents = useCallback(async () => {
+    if (!isDbConfigured) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    const { data } = await getEvents();
+    setEvents(data.map(mapDbEventToDisplay));
+    setLoading(false);
+  }, [isDbConfigured]);
+
+  useEffect(() => {
+    fetchEvents();
+  }, [fetchEvents]);
 
   const sortedEvents = [...events].sort((a, b) => {
     if (a.state === 'completed' && b.state !== 'completed') return 1;
@@ -45,13 +97,12 @@ export function EventDiscovery() {
     return new Date(a.sprintStart).getTime() - new Date(b.sprintStart).getTime();
   });
 
-  const handleEventClick = (event: IdeathonEvent) => {
+  const handleEventClick = (event: DisplayEvent) => {
     if (event.state === 'upcoming') return;
     setSelectedEvent(event);
     if (event.state === 'registration_open') {
       setShowEntryGate(true);
     } else {
-      setActiveEvent(event);
       setActiveTab('team');
     }
   };
@@ -79,6 +130,33 @@ export function EventDiscovery() {
       <div className="relative">
         <div className="absolute left-8 top-0 bottom-0 w-px bg-gradient-to-b from-violet-500 via-purple-500 to-slate-700" />
         
+        {/* Loading State */}
+        {loading && (
+          <div className="flex items-center justify-center py-20">
+            <Loader2 className="w-8 h-8 text-violet-400 animate-spin" />
+          </div>
+        )}
+
+        {/* Not Configured State */}
+        {!loading && !isDbConfigured && (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <AlertCircle className="w-12 h-12 text-amber-400 mb-3" />
+            <p className="text-slate-400">Database not configured</p>
+            <p className="text-sm text-slate-500">Add Supabase credentials to view events</p>
+          </div>
+        )}
+
+        {/* Empty State */}
+        {!loading && isDbConfigured && events.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <Calendar className="w-12 h-12 text-slate-500 mb-3" />
+            <p className="text-slate-400">No events yet</p>
+            <p className="text-sm text-slate-500">Check back later for upcoming events</p>
+          </div>
+        )}
+
+        {/* Events List */}
+        {!loading && events.length > 0 && (
         <div className="space-y-6">
           {sortedEvents.map((event, index) => {
             const isLocked = event.state === 'upcoming';
@@ -207,28 +285,12 @@ export function EventDiscovery() {
                       </div>
                     )}
 
-                    {/* Projects Preview */}
-                    {event.projects.length > 0 && (
+                    {/* Event Description Preview */}
+                    {event.description && (
                       <div className="pt-2 border-t border-slate-700">
-                        <p className="text-xs text-slate-500 mb-2">
-                          {event.projects.length} questions submitted • Top voted will become projects
+                        <p className="text-xs text-slate-400 line-clamp-2">
+                          {event.description}
                         </p>
-                        <div className="flex flex-wrap gap-1">
-                          {event.projects.slice(0, 4).map((proj, i) => (
-                            <Badge 
-                              key={proj.id} 
-                              variant="outline" 
-                              className={`text-xs ${
-                                proj.isSponsored 
-                                  ? 'border-amber-500/50 text-amber-400' 
-                                  : 'border-slate-600 text-slate-400'
-                              }`}
-                            >
-                              {proj.isSponsored && <Zap className="w-3 h-3 mr-1" />}
-                              {proj.keywords[0] || 'Question'} #{i + 1}
-                            </Badge>
-                          ))}
-                        </div>
                       </div>
                     )}
                   </CardContent>
@@ -237,23 +299,54 @@ export function EventDiscovery() {
             );
           })}
         </div>
+        )}
       </div>
 
-      {/* Entry Gate Modal */}
+      {/* Entry Gate Modal - simplified for now */}
       <AnimatePresence>
         {showEntryGate && selectedEvent && (
-          <EntryGateModal
-            event={selectedEvent}
-            onClose={() => {
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+            onClick={() => {
               setShowEntryGate(false);
               setSelectedEvent(null);
             }}
-            onSuccess={() => {
-              setShowEntryGate(false);
-              setActiveEvent(selectedEvent);
-              setActiveTab('team');
-            }}
-          />
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-md w-full"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 className="text-xl font-bold text-white mb-2">Register for {selectedEvent.name}</h3>
+              <p className="text-slate-400 mb-4">Registration is open! Click below to join this event.</p>
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  className="flex-1 border-slate-600"
+                  onClick={() => {
+                    setShowEntryGate(false);
+                    setSelectedEvent(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1 bg-violet-600 hover:bg-violet-700"
+                  onClick={() => {
+                    setShowEntryGate(false);
+                    setActiveTab('team');
+                  }}
+                >
+                  Join Event
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
