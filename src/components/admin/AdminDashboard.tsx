@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
   Shield,
@@ -8,37 +8,62 @@ import {
   Users,
   Settings,
   Plus,
-  Edit,
-  Trash2,
-  Eye,
   BarChart3,
   Bell,
-  Image,
-  MapPin,
-  Clock,
   UserCheck,
   AlertTriangle,
-  CheckCircle,
-  XCircle,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAppStore } from '@/store';
-import { ADMIN_EMAIL } from '@/lib/supabase';
+import { ADMIN_EMAIL, isSupabaseConfigured } from '@/lib/supabase';
+import { getAdminStats } from '@/lib/db';
 import { EventCreationModal } from './EventCreationModal';
 import { UserManagementPanel } from './UserManagementPanel';
 import { EventManagementPanel } from './EventManagementPanel';
 
 export function AdminDashboard() {
   const { currentUser } = useAppStore();
-  const [activeTab, setActiveTab] = useState('overview');
   const [showEventModal, setShowEventModal] = useState(false);
+  const [stats, setStats] = useState({ totalUsers: 0, activeEvents: 0, teamsFormed: 0, pendingApprovals: 0 });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const isDbConfigured = isSupabaseConfigured();
 
   // Check if user is admin
   const isAdmin = currentUser?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase();
+
+  // Fetch stats from database
+  const fetchStats = useCallback(async () => {
+    if (!isDbConfigured) {
+      setLoading(false);
+      return;
+    }
+    
+    setLoading(true);
+    const { data, error } = await getAdminStats();
+    if (error) {
+      setError(error.message);
+    } else {
+      setStats(data);
+      setError(null);
+    }
+    setLoading(false);
+  }, [isDbConfigured]);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats, refreshKey]);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshKey(k => k + 1);
+  }, []);
 
   if (!isAdmin) {
     return (
@@ -59,16 +84,33 @@ export function AdminDashboard() {
     );
   }
 
-  // Mock stats for overview
-  const stats = [
-    { label: 'Total Users', value: 248, icon: Users, color: 'text-blue-400', bg: 'bg-blue-500/20' },
-    { label: 'Active Events', value: 3, icon: Calendar, color: 'text-emerald-400', bg: 'bg-emerald-500/20' },
-    { label: 'Teams Formed', value: 42, icon: UserCheck, color: 'text-violet-400', bg: 'bg-violet-500/20' },
-    { label: 'Pending Approvals', value: 12, icon: Bell, color: 'text-amber-400', bg: 'bg-amber-500/20' },
+  const statItems = [
+    { label: 'Total Users', value: stats.totalUsers, icon: Users, color: 'text-blue-400', bg: 'bg-blue-500/20' },
+    { label: 'Active Events', value: stats.activeEvents, icon: Calendar, color: 'text-emerald-400', bg: 'bg-emerald-500/20' },
+    { label: 'Teams Formed', value: stats.teamsFormed, icon: UserCheck, color: 'text-violet-400', bg: 'bg-violet-500/20' },
+    { label: 'Pending Approvals', value: stats.pendingApprovals, icon: Bell, color: 'text-amber-400', bg: 'bg-amber-500/20' },
   ];
 
   return (
     <div className="space-y-6">
+      {/* Database Warning Banner */}
+      {!isDbConfigured && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center gap-3"
+        >
+          <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0" />
+          <div>
+            <p className="text-amber-400 font-medium">Database Not Connected</p>
+            <p className="text-sm text-slate-400">
+              Add your Supabase credentials to <code className="text-amber-300">.env.local</code> to enable full functionality.
+              Currently showing empty data.
+            </p>
+          </div>
+        </motion.div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -91,7 +133,7 @@ export function AdminDashboard() {
 
       {/* Quick Stats */}
       <div className="grid grid-cols-4 gap-4">
-        {stats.map((stat, i) => {
+        {statItems.map((stat, i) => {
           const Icon = stat.icon;
           return (
             <motion.div

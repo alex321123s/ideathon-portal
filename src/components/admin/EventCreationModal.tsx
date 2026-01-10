@@ -5,16 +5,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
   Calendar,
-  Image,
   MapPin,
-  Users,
   Clock,
   FileText,
   Palette,
   Upload,
   Sparkles,
   Save,
-  Eye,
+  Loader2,
+  AlertCircle,
+  Users,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,6 +29,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { createEvent, uploadEventImage, isSupabaseConfigured } from '@/lib/db';
+import { useAppStore } from '@/store';
 
 interface EventFormData {
   name: string;
@@ -66,6 +68,10 @@ export function EventCreationModal({ onClose, onSave, editEvent }: EventCreation
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState(1);
   const [imagePreview, setImagePreview] = useState<string | null>(editEvent?.imageUrl || null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { currentUser } = useAppStore();
+  const isDbConfigured = isSupabaseConfigured();
   const [formData, setFormData] = useState<EventFormData>({
     name: editEvent?.name || '',
     description: editEvent?.description || '',
@@ -108,8 +114,70 @@ export function EventCreationModal({ onClose, onSave, editEvent }: EventCreation
     setFormData({ ...formData, [field]: value });
   };
 
-  const handleSave = () => {
-    onSave(formData);
+  const handleSave = async () => {
+    if (!isDbConfigured) {
+      setError('Database not configured. Please add Supabase credentials.');
+      return;
+    }
+
+    if (!formData.name || !formData.location || !formData.registrationOpens || !formData.sprintStart) {
+      setError('Please fill in all required fields.');
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      // Calculate sprint end based on duration
+      const sprintStartDate = new Date(formData.sprintStart);
+      const sprintEndDate = new Date(sprintStartDate.getTime() + formData.sprintDuration * 60 * 1000);
+
+      // Upload image if provided
+      let imageUrl = formData.imageUrl;
+      if (formData.imageFile) {
+        const tempId = crypto.randomUUID();
+        const { url, error: uploadError } = await uploadEventImage(formData.imageFile, tempId);
+        if (uploadError) {
+          console.error('Image upload failed:', uploadError);
+        } else if (url) {
+          imageUrl = url;
+        }
+      }
+
+      const eventData = {
+        name: formData.name,
+        description: formData.description || null,
+        image_url: imageUrl || null,
+        generated_theme: formData.generatedTheme || null,
+        state: 'upcoming' as const,
+        registration_opens: new Date(formData.registrationOpens).toISOString(),
+        registration_closes: new Date(formData.registrationCloses || formData.teamFormationStart).toISOString(),
+        team_formation_start: new Date(formData.teamFormationStart || formData.registrationCloses).toISOString(),
+        sprint_start: sprintStartDate.toISOString(),
+        sprint_end: sprintEndDate.toISOString(),
+        location: formData.location,
+        max_participants: formData.maxParticipants,
+        min_team_size: formData.minTeamSize,
+        max_team_size: formData.maxTeamSize,
+        created_by: currentUser?.id || 'admin',
+      };
+
+      const { data, error: createError } = await createEvent(eventData);
+      
+      if (createError) {
+        setError(createError.message);
+        setSaving(false);
+        return;
+      }
+
+      onSave(formData);
+    } catch (err) {
+      setError('An unexpected error occurred');
+      console.error(err);
+    }
+    
+    setSaving(false);
   };
 
   const totalSteps = 4;
@@ -551,7 +619,13 @@ export function EventCreationModal({ onClose, onSave, editEvent }: EventCreation
             >
               Previous
             </Button>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
+              {error && (
+                <p className="text-sm text-red-400 flex items-center gap-1">
+                  <AlertCircle className="w-4 h-4" />
+                  {error}
+                </p>
+              )}
               {step < totalSteps ? (
                 <Button
                   onClick={() => setStep(step + 1)}
@@ -562,10 +636,15 @@ export function EventCreationModal({ onClose, onSave, editEvent }: EventCreation
               ) : (
                 <Button
                   onClick={handleSave}
+                  disabled={saving}
                   className="bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700"
                 >
-                  <Save className="w-4 h-4 mr-2" />
-                  Create Event
+                  {saving ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4 mr-2" />
+                  )}
+                  {saving ? 'Creating...' : 'Create Event'}
                 </Button>
               )}
             </div>
